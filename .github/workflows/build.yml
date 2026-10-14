@@ -1,0 +1,55 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Auto-Extract ZIP if Uploaded Directly from Phone
+        run: |
+          if [ ! -f "settings.gradle.kts" ] && [ ! -f "AndroidImageCompressor/settings.gradle.kts" ]; then
+            ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+            if [ -n "$ZIP_FILE" ]; then
+              echo "检测到直接上传的压缩包: $ZIP_FILE ，正在云端自动解压还原目录结构..."
+              unzip -o "$ZIP_FILE" -d .
+            fi
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build Debug APK
+        run: |
+          if [ -f "settings.gradle.kts" ]; then
+            gradle assembleDebug --no-daemon --stacktrace
+          elif [ -f "AndroidImageCompressor/settings.gradle.kts" ]; then
+            cd AndroidImageCompressor
+            gradle assembleDebug --no-daemon --stacktrace
+          else
+            echo "未找到 settings.gradle.kts，请确保已上传 AndroidImageCompressor.zip 或完整工程文件"
+            exit 1
+          fi
+
+      - name: Upload Compiled APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImageCompressor-Debug-APK
+          path: "**/app/build/outputs/apk/debug/*.apk"
